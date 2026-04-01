@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Skuru — SKU Management</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; height: 100vh; overflow: hidden; }
+  .app { display: flex; height: 100vh; }
+  .sidebar { width: 200px; min-width: 200px; background: #fff; border-right: 0.5px solid rgba(0,0,0,0.1); padding: 20px 0; display: flex; flex-direction: column; gap: 4px; }
+  .sidebar-logo { padding: 0 16px 20px; font-size: 15px; font-weight: 500; color: #1a1a1a; border-bottom: 0.5px solid rgba(0,0,0,0.1); margin-bottom: 8px; }
+  .sidebar-logo span { font-size: 13px; color: #666; font-weight: 400; display: block; margin-top: 2px; }
+  .nav-item { padding: 8px 16px; font-size: 13px; color: #666; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .nav-item:hover { background: #f5f5f3; color: #1a1a1a; }
+  .nav-item.active { background: #f5f5f3; color: #1a1a1a; font-weight: 500; border-left: 2px solid #378ADD; }
+  .nav-icon { width: 14px; height: 14px; opacity: 0.6; flex-shrink: 0; }
+  .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .topbar { padding: 16px 24px; background: #fff; border-bottom: 0.5px solid rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 15px; font-weight: 500; }
+  .topbar-sub { font-size: 12px; color: #666; margin-top: 2px; }
+  .btn { padding: 7px 14px; font-size: 12px; border-radius: 8px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; font-family: inherit; }
+  .btn:hover { background: #f5f5f3; }
+  .btn-primary { background: #378ADD; color: #E6F1FB; border-color: #185FA5; }
+  .btn-primary:hover { background: #185FA5; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+  .content { flex: 1; padding: 24px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Dashboard */
+  .metric-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 24px; }
+  .metric-card { background: #f5f5f3; border-radius: 8px; padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-value { font-size: 22px; font-weight: 500; }
+  .metric-sub { font-size: 11px; color: #888; margin-top: 3px; }
+  .section-title { font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+  .card { background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+  .import-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+  .import-row:last-child { border-bottom: none; }
+  .import-name { font-size: 13px; font-weight: 500; }
+  .import-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-pending { background: #FAEEDA; color: #854F0B; }
+  .badge-imported { background: #EAF3DE; color: #3B6D11; }
+
+  /* Vendors */
+  .vendor-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .vendor-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 16px; cursor: pointer; }
+  .vendor-card:hover { border-color: rgba(0,0,0,0.25); }
+  .vendor-avatar { width: 36px; height: 36px; border-radius: 8px; background: #E6F1FB; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: #185FA5; margin-bottom: 10px; }
+  .vendor-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .vendor-stat { font-size: 11px; color: #888; }
+  .vendor-stat span { color: #1a1a1a; font-weight: 500; }
+
+  /* Import */
+  .review-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .invoice-preview { background: #f5f5f3; border-radius: 8px; padding: 16px; font-size: 11px; color: #888; line-height: 1.8; font-family: 'SF Mono', 'Fira Mono', monospace; }
+  .inv-title { font-size: 12px; font-weight: 500; color: #1a1a1a; margin-bottom: 10px; }
+  .sku-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .sku-table th { text-align: left; font-size: 11px; font-weight: 500; color: #888; padding: 6px 8px; border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+  .sku-table td { padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.08); vertical-align: middle; color: #1a1a1a; }
+  .sku-table tr:last-child td { border-bottom: none; }
+  .sku-input { background: transparent; border: 0.5px solid transparent; border-radius: 4px; padding: 3px 6px; font-size: 12px; color: #1a1a1a; font-family: 'SF Mono', 'Fira Mono', monospace; width: 100%; }
+  .sku-input:hover { border-color: rgba(0,0,0,0.2); background: #f5f5f3; }
+  .sku-input:focus { outline: none; border-color: #378ADD; background: #fff; }
+  .flag-ok { width: 6px; height: 6px; border-radius: 50%; background: #639922; display: inline-block; margin-right: 4px; }
+  .flag-warn { width: 6px; height: 6px; border-radius: 50%; background: #EF9F27; display: inline-block; margin-right: 4px; }
+  .flag-err { width: 6px; height: 6px; border-radius: 50%; background: #E24B4A; display: inline-block; margin-right: 4px; }
+  .import-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 16px; border-top: 0.5px solid rgba(0,0,0,0.08); }
+  .upload-zone { border: 1px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; }
+  .upload-zone:hover { background: #f5f5f3; }
+  .sel { width: 100%; font-size: 12px; padding: 7px 10px; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; font-family: inherit; }
+  .custom-builder { margin-top: 12px; background: #f5f5f3; border-radius: 8px; padding: 14px; display: none; }
+  .custom-builder.visible { display: block; }
+  .builder-label { font-size: 11px; color: #888; margin-bottom: 8px; }
+  .block-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .block-chip { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #888; user-select: none; }
+  .block-chip:hover { background: #E6F1FB; color: #185FA5; border-color: #185FA5; }
+  .block-chip.selected { background: #378ADD; color: #E6F1FB; border-color: #185FA5; }
+  .formula-preview { font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 12px; color: #1a1a1a; background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 8px 10px; margin-top: 8px; min-height: 32px; }
+  .sep-input { width: 40px; font-size: 12px; padding: 4px 6px; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; font-family: monospace; text-align: center; }
+
+  /* Review — vendor tabs */
+  .vendor-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .vendor-tab { padding: 7px 16px; font-size: 12px; border-radius: 8px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.15); background: #fff; color: #666; font-family: inherit; display: flex; align-items: center; gap: 7px; transition: all 0.12s; }
+  .vendor-tab:hover { border-color: rgba(0,0,0,0.3); color: #1a1a1a; }
+  .vendor-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .vendor-tab .tab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .vendor-tab.active .tab-dot-err { background: #E24B4A; }
+  .vendor-tab.active .tab-dot-ok { background: #639922; }
+  .vendor-tab:not(.active) .tab-dot-err { background: #E24B4A; }
+  .vendor-tab:not(.active) .tab-dot-ok { background: #639922; }
+  .review-sub { display: none; }
+  .review-sub.active { display: block; }
+
+  /* Banners */
+  .flag-banner { display: flex; align-items: flex-start; gap: 10px; background: #FCEBEB; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  .flag-banner-dot { width: 8px; height: 8px; border-radius: 50%; background: #E24B4A; flex-shrink: 0; margin-top: 3px; }
+  .flag-banner-title { font-size: 12px; color: #A32D2D; font-weight: 500; }
+  .flag-banner-sub { font-size: 11px; color: #A32D2D; margin-top: 2px; }
+  .all-clear { display: flex; align-items: center; gap: 8px; background: #EAF3DE; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  .all-clear-dot { width: 8px; height: 8px; border-radius: 50%; background: #639922; flex-shrink: 0; }
+  .all-clear-text { font-size: 12px; color: #3B6D11; font-weight: 500; }
+  .all-clear-sub { font-size: 11px; color: #3B6D11; margin-top: 1px; }
+
+  .connected-badge { font-size: 11px; color: #888; padding: 12px 0; border-top: 0.5px solid rgba(0,0,0,0.08); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">Skuru<span>Golf Pro Shop</span></div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('vendors',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M4 4V2h8v2M3 4l1 10h8l1-10"/></svg>
+      Vendors
+    </div>
+    <div class="nav-item" onclick="showPage('import',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>
+      New import
+    </div>
+    <div class="nav-item" onclick="showPage('review',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/><circle cx="12" cy="11" r="3"/><path d="M14.5 13.5l-1.5-1.5"/></svg>
+      Review SKUs
+    </div>
+    <div style="margin-top:auto;padding:0 16px;">
+      <div class="connected-badge">Connected to Square</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+        <div class="topbar-sub" id="page-sub">Welcome back, Jack</div>
+      </div>
+      <button class="btn btn-primary" onclick="showPage('import',document.querySelectorAll('.nav-item')[2])">+ New import</button>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="metric-row">
+          <div class="metric-card"><div class="metric-label">Total SKUs</div><div class="metric-value">1,284</div><div class="metric-sub">across all vendors</div></div>
+          <div class="metric-card"><div class="metric-label">Pending review</div><div class="metric-value">3</div><div class="metric-sub">imports awaiting approval</div></div>
+          <div class="metric-card"><div class="metric-label">Vendors</div><div class="metric-value">7</div><div class="metric-sub">active suppliers</div></div>
+          <div class="metric-card"><div class="metric-label">Last import</div><div class="metric-value">Today</div><div class="metric-sub">Titleist — 42 SKUs</div></div>
+        </div>
+        <div class="section-title">Recent imports</div>
+        <div class="card">
+          <div class="import-row">
+            <div><div class="import-name">Titleist — Spring order</div><div class="import-meta">42 SKUs generated · Today</div></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="badge badge-pending">Pending review</span>
+              <button class="btn btn-sm" onclick="showPage('review',document.querySelectorAll('.nav-item')[3]);showVendorTab('titleist')">Review →</button>
+            </div>
+          </div>
+          <div class="import-row">
+            <div><div class="import-name">Callaway — Restock</div><div class="import-meta">18 SKUs generated · Mar 28</div></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="badge badge-pending">Pending review</span>
+              <button class="btn btn-sm" onclick="showPage('review',document.querySelectorAll('.nav-item')[3]);showVendorTab('callaway')">Review →</button>
+            </div>
+          </div>
+          <div class="import-row">
+            <div><div class="import-name">FootJoy — Apparel Q1</div><div class="import-meta">67 SKUs generated · Mar 22</div></div>
+            <span class="badge badge-imported">Imported to Square</span>
+          </div>
+          <div class="import-row">
+            <div><div class="import-name">Ping — Equipment drop</div><div class="import-meta">11 SKUs generated · Mar 15</div></div>
+            <span class="badge badge-imported">Imported to Square</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- VENDORS -->
+      <div class="page" id="page-vendors">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="section-title" style="margin:0;">All vendors</div>
+          <button class="btn">+ Add vendor</button>
+        </div>
+        <div class="vendor-grid">
+          <div class="vendor-card" onclick="showPage('review',document.querySelectorAll('.nav-item')[3]);showVendorTab('titleist')">
+            <div class="vendor-avatar">TI</div>
+            <div class="vendor-name">Titleist</div>
+            <div class="vendor-stat">Imports: <span>12</span></div>
+            <div class="vendor-stat">SKUs created: <span>348</span></div>
+            <div class="vendor-stat" style="margin-top:8px;">Last import: Today</div>
+          </div>
+          <div class="vendor-card" onclick="showPage('review',document.querySelectorAll('.nav-item')[3]);showVendorTab('callaway')">
+            <div class="vendor-avatar" style="background:#EAF3DE;color:#3B6D11;">CA</div>
+            <div class="vendor-name">Callaway</div>
+            <div class="vendor-stat">Imports: <span>8</span></div>
+            <div class="vendor-stat">SKUs created: <span>201</span></div>
+            <div class="vendor-stat" style="margin-top:8px;">Last import: Mar 28</div>
+          </div>
+          <div class="vendor-card">
+            <div class="vendor-avatar" style="background:#FAEEDA;color:#854F0B;">FJ</div>
+            <div class="vendor-name">FootJoy</div>
+            <div class="vendor-stat">Imports: <span>6</span></div>
+            <div class="vendor-stat">SKUs created: <span>412</span></div>
+            <div class="vendor-stat" style="margin-top:8px;">Last import: Mar 22</div>
+          </div>
+          <div class="vendor-card">
+            <div class="vendor-avatar" style="background:#FBEAF0;color:#993556;">PI</div>
+            <div class="vendor-name">Ping</div>
+            <div class="vendor-stat">Imports: <span>4</span></div>
+            <div class="vendor-stat">SKUs created: <span>89</span></div>
+            <div class="vendor-stat" style="margin-top:8px;">Last import: Mar 15</div>
+          </div>
+          <div class="vendor-card">
+            <div class="vendor-avatar" style="background:#EEEDFE;color:#534AB7;">TM</div>
+            <div class="vendor-name">TaylorMade</div>
+            <div class="vendor-stat">Imports: <span>5</span></div>
+            <div class="vendor-stat">SKUs created: <span>174</span></div>
+            <div class="vendor-stat" style="margin-top:8px;">Last import: Mar 10</div>
+          </div>
+          <div class="vendor-card" style="border-style:dashed;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;min-height:120px;">
+            <div style="font-size:20px;color:#aaa;">+</div>
+            <div style="font-size:12px;color:#aaa;">Add new vendor</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMPORT -->
+      <div class="page" id="page-import">
+        <div class="card">
+          <div style="font-size:13px;font-weight:500;margin-bottom:4px;">Upload invoice or purchase order</div>
+          <div style="font-size:11px;color:#888;margin-bottom:16px;">PDF, image, or photo from your phone</div>
+          <div class="upload-zone">
+            <div style="font-size:24px;margin-bottom:8px;">↑</div>
+            <div style="font-size:13px;color:#888;">Drag & drop your invoice here</div>
+            <div style="font-size:11px;color:#aaa;margin-top:4px;">or click to browse — PDF, JPG, PNG supported</div>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:12px;align-items:flex-start;">
+            <div style="flex:1;">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">Vendor</div>
+              <select class="sel"><option>Titleist</option><option>Callaway</option><option>FootJoy</option><option>Ping</option><option>TaylorMade</option></select>
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">SKU formula</div>
+              <select class="sel" id="formula-select" onchange="handleFormulaChange(this.value)">
+                <option value="preset1">BRAND-CATEGORY-COLOR-SIZE</option>
+                <option value="preset2">BRAND-COLOR-SIZE</option>
+                <option value="preset3">CATEGORY-SKU#</option>
+                <option value="custom">Custom formula...</option>
+              </select>
+              <div class="custom-builder" id="custom-builder">
+                <div class="builder-label">Select blocks for your formula — click to add in order</div>
+                <div class="block-row">
+                  <span class="block-chip" onclick="toggleBlock(this,'BRAND')">Brand</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'CAT')">Category</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'COLOR')">Color</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'SIZE')">Size</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'SKU#')">SKU #</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'VENDOR')">Vendor</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'YEAR')">Year</span>
+                  <span class="block-chip" onclick="toggleBlock(this,'SEASON')">Season</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <div style="font-size:11px;color:#888;">Separator:</div>
+                  <input class="sep-input" id="sep-input" value="-" maxlength="3" oninput="updatePreview()"/>
+                  <div style="font-size:11px;color:#888;">Preview:</div>
+                </div>
+                <div class="formula-preview" id="formula-preview"><span style="color:#aaa;font-style:italic;">Select blocks above to build your formula</span></div>
+                <div style="margin-top:10px;display:flex;gap:6px;">
+                  <button class="btn btn-sm btn-primary" onclick="saveFormula()">Save formula</button>
+                  <button class="btn btn-sm" onclick="clearBlocks()">Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;text-align:right;">
+          <button class="btn btn-primary" onclick="showPage('review',document.querySelectorAll('.nav-item')[3])">Scan & generate SKUs →</button>
+        </div>
+      </div>
+
+      <!-- REVIEW SKUs -->
+      <div class="page" id="page-review">
+
+        <!-- Vendor tab switcher -->
+        <div class="vendor-tabs">
+          <button class="vendor-tab active" id="tab-titleist" onclick="showVendorTab('titleist')">
+            <span class="tab-dot tab-dot-err"></span>
+            Titleist Spring order
+          </button>
+          <button class="vendor-tab" id="tab-callaway" onclick="showVendorTab('callaway')">
+            <span class="tab-dot tab-dot-ok"></span>
+            Callaway Restock
+          </button>
+        </div>
+
+        <!-- TITLEIST — flagged / duplicate SKU -->
+        <div class="review-sub active" id="review-titleist">
+          <div style="font-size:11px;color:#888;margin-bottom:12px;">Titleist Spring order · 42 items · <span style="color:#A32D2D;font-weight:500;">1 duplicate SKU conflict detected</span></div>
+
+          <div class="flag-banner">
+            <div class="flag-banner-dot"></div>
+            <div>
+              <div class="flag-banner-title">Duplicate SKU conflict — TIT-BALL-WHT already exists in Square</div>
+              <div class="flag-banner-sub">This SKU was previously imported and is already tracked in your POS. Rename it or it will overwrite your existing item. All other SKUs are clear.</div>
+            </div>
+          </div>
+
+          <div class="review-layout">
+            <div>
+              <div class="section-title">Original invoice</div>
+              <div class="invoice-preview">
+                <div class="inv-title">TITLEIST — PURCHASE ORDER #84721</div>
+                Item: Pro V1 Golf Balls<br>
+                Colors: White, Yellow<br>
+                Qty: 48 dz · $47.99/dz<br><br>
+                Item: Players 4 Stand Bag<br>
+                Colors: Black/White, Navy/White<br>
+                Qty: 12 units · $159.00<br><br>
+                Item: Tour Soft Golf Balls<br>
+                Colors: White<br>
+                Qty: 24 dz · $34.99/dz<br><br>
+                <span style="color:#E24B4A;">⚠ Pro V1 White — SKU conflict with existing Square item</span>
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Generated SKUs — click any field to edit</div>
+              <div class="card" style="padding:0;overflow:hidden;">
+                <table class="sku-table">
+                  <thead><tr><th></th><th>Product</th><th>SKU</th><th>Color</th></tr></thead>
+                  <tbody>
+                    <tr style="background:rgba(226,75,74,0.05);">
+                      <td><span class="flag-err"></span></td>
+                      <td style="font-size:11px;">Pro V1 Balls</td>
+                      <td><input class="sku-input" value="TIT-BALL-WHT" style="color:#A32D2D;border-color:rgba(226,75,74,0.3);background:rgba(226,75,74,0.04);"/></td>
+                      <td style="font-size:11px;color:#A32D2D;">Duplicate</td>
+                    </tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Pro V1 Balls</td><td><input class="sku-input" value="TIT-BALL-YLW"/></td><td style="font-size:11px;">Yellow</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Players 4 Bag</td><td><input class="sku-input" value="TIT-BAG-BLK"/></td><td style="font-size:11px;">Black/White</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Players 4 Bag</td><td><input class="sku-input" value="TIT-BAG-NVY"/></td><td style="font-size:11px;">Navy/White</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Tour Soft Balls</td><td><input class="sku-input" value="TIT-SOFT-WHT"/></td><td style="font-size:11px;">White</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="font-size:11px;color:#A32D2D;margin-top:8px;padding:0 4px;">Rename the duplicate SKU above before importing — click the field to edit it.</div>
+            </div>
+          </div>
+
+          <div class="import-bar">
+            <div style="font-size:12px;color:#888;">42 SKUs ready · 1 conflict · resolve before importing</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn">Save draft</button>
+              <button class="btn btn-primary" style="opacity:0.5;cursor:not-allowed;" disabled>Import all to Square →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CALLAWAY — all clear -->
+        <div class="review-sub" id="review-callaway">
+          <div style="font-size:11px;color:#888;margin-bottom:12px;">Callaway Restock · 18 items · <span style="color:#3B6D11;font-weight:500;">All items verified — no flags</span></div>
+
+          <div class="all-clear">
+            <div class="all-clear-dot"></div>
+            <div>
+              <div class="all-clear-text">All SKUs generated successfully</div>
+              <div class="all-clear-sub">Skuru matched all products, colors, and sizes from the invoice. Review below and import when ready.</div>
+            </div>
+          </div>
+
+          <div class="review-layout">
+            <div>
+              <div class="section-title">Original invoice</div>
+              <div class="invoice-preview">
+                <div class="inv-title">CALLAWAY — PURCHASE ORDER #29103</div>
+                Item: Rogue ST Max Driver<br>
+                Shaft: Regular, Stiff, X-Stiff<br>
+                Colors: Black/Chrome<br>
+                Qty: 6 units · $499.99<br><br>
+                Item: Apex Pro Irons Set<br>
+                Sizes: 4-PW<br>
+                Shaft: Steel, Graphite<br>
+                Qty: 4 sets · $1,199.99<br><br>
+                Item: Chrome Soft Golf Balls<br>
+                Colors: White, Yellow, Triple Track<br>
+                Qty: 36 dz · $44.99/dz<br><br>
+                Item: Org 14 Cart Bag<br>
+                Colors: Black, Navy, White/Charcoal<br>
+                Qty: 9 units · $249.99
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Generated SKUs — click any field to edit</div>
+              <div class="card" style="padding:0;overflow:hidden;">
+                <table class="sku-table">
+                  <thead><tr><th></th><th>Product</th><th>SKU</th><th>Variant</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Rogue ST Driver</td><td><input class="sku-input" value="CAL-DRV-REG"/></td><td style="font-size:11px;">Regular</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Rogue ST Driver</td><td><input class="sku-input" value="CAL-DRV-STF"/></td><td style="font-size:11px;">Stiff</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Rogue ST Driver</td><td><input class="sku-input" value="CAL-DRV-XST"/></td><td style="font-size:11px;">X-Stiff</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Apex Pro Irons</td><td><input class="sku-input" value="CAL-IRN-STL"/></td><td style="font-size:11px;">Steel</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Apex Pro Irons</td><td><input class="sku-input" value="CAL-IRN-GFT"/></td><td style="font-size:11px;">Graphite</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Chrome Soft Balls</td><td><input class="sku-input" value="CAL-BALL-WHT"/></td><td style="font-size:11px;">White</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Chrome Soft Balls</td><td><input class="sku-input" value="CAL-BALL-YLW"/></td><td style="font-size:11px;">Yellow</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Chrome Soft Balls</td><td><input class="sku-input" value="CAL-BALL-TT"/></td><td style="font-size:11px;">Triple Track</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Org 14 Cart Bag</td><td><input class="sku-input" value="CAL-BAG-BLK"/></td><td style="font-size:11px;">Black</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Org 14 Cart Bag</td><td><input class="sku-input" value="CAL-BAG-NVY"/></td><td style="font-size:11px;">Navy</td></tr>
+                    <tr><td><span class="flag-ok"></span></td><td style="font-size:11px;">Org 14 Cart Bag</td><td><input class="sku-input" value="CAL-BAG-WHC"/></td><td style="font-size:11px;">White/Charcoal</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="import-bar">
+            <div style="font-size:12px;color:#888;">18 SKUs ready · 0 flagged · good to go</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn">Save draft</button>
+              <button class="btn btn-primary">Import all to Square →</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /page-review -->
+
+    </div>
+  </div>
+</div>
+
+<script>
+const pages = {
+  dashboard: { title: 'Dashboard', sub: 'Welcome back, Jack' },
+  vendors:   { title: 'Vendors',   sub: 'Manage your suppliers' },
+  import:    { title: 'New import', sub: 'Upload an invoice to generate SKUs' },
+  review:    { title: 'Review SKUs', sub: 'Select an order to review' }
+};
+
+function showPage(name, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('page-title').textContent = pages[name].title;
+  document.getElementById('page-sub').textContent = pages[name].sub;
+}
+
+function showVendorTab(vendor) {
+  document.querySelectorAll('.vendor-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.review-sub').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-' + vendor).classList.add('active');
+  document.getElementById('review-' + vendor).classList.add('active');
+  const subs = { titleist: 'Titleist Spring order — 1 item needs attention', callaway: 'Callaway Restock — ready to import' };
+  document.getElementById('page-sub').textContent = subs[vendor];
+}
+
+function handleFormulaChange(val) {
+  const b = document.getElementById('custom-builder');
+  val === 'custom' ? b.classList.add('visible') : (b.classList.remove('visible'), clearBlocks());
+}
+
+let selectedBlocks = [];
+function toggleBlock(el, val) {
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    selectedBlocks = selectedBlocks.filter(b => b !== val);
+  } else {
+    el.classList.add('selected');
+    selectedBlocks.push(val);
+  }
+  updatePreview();
+}
+
+function updatePreview() {
+  const sep = document.getElementById('sep-input').value || '-';
+  const p = document.getElementById('formula-preview');
+  if (!selectedBlocks.length) {
+    p.innerHTML = '<span style="color:#aaa;font-style:italic;">Select blocks above to build your formula</span>';
+    return;
+  }
+  p.innerHTML = selectedBlocks.map(b => '<span style="color:#185FA5;">' + b + '</span>').join('<span style="color:#aaa;">' + sep + '</span>');
+}
+
+function clearBlocks() {
+  selectedBlocks = [];
+  document.querySelectorAll('.block-chip').forEach(c => c.classList.remove('selected'));
+  updatePreview();
+}
+
+function saveFormula() {
+  const sep = document.getElementById('sep-input').value || '-';
+  if (!selectedBlocks.length) return;
+  const label = selectedBlocks.join(sep);
+  const sel = document.getElementById('formula-select');
+  const existing = Array.from(sel.options).find(o => o.value === 'saved_custom');
+  if (existing) { existing.text = label; }
+  else { const opt = new Option(label, 'saved_custom'); sel.insertBefore(opt, sel.options[sel.options.length - 1]); }
+  sel.value = 'saved_custom';
+  document.getElementById('custom-builder').classList.remove('visible');
+}
+</script>
+</body>
+</html>
